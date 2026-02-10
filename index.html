@@ -65,8 +65,8 @@ const ADMINS = [
 
 /* ===== Workers Storage ===== */
 let workers = JSON.parse(localStorage.getItem("workers")) || [
-  {id:1,name:"Moritz",friends:[],last:null},
-  {id:2,name:"Eduard",friends:[],last:null},
+  {id:1,name:"Moritz",friends:[2],last:null},
+  {id:2,name:"Eduard",friends:[1],last:null},
   {id:3,name:"Hassan",friends:[],last:null},
   {id:4,name:"Rafael",friends:[],last:null},
   {id:5,name:"Leonardo",friends:[],last:null},
@@ -81,6 +81,7 @@ function saveWorkers(){ localStorage.setItem("workers",JSON.stringify(workers));
 /* ===== Render Worker List ===== */
 const wl = document.getElementById("workerList");
 const adminWL = document.getElementById("adminWorkers");
+let adminPanelVisible = false;
 
 function renderWorkers(){
   wl.innerHTML = "";
@@ -88,7 +89,6 @@ function renderWorkers(){
     wl.innerHTML += `<label><input type="checkbox" value="${w.id}"> ${w.name}</label><br>`;
   });
 
-  // admin panel
   if(adminPanelVisible){
     adminWL.innerHTML="";
     workers.forEach(w=>{
@@ -103,8 +103,6 @@ function renderWorkers(){
 }
 
 /* ===== Admin Functions ===== */
-let adminPanelVisible = false;
-
 function adminLogin(){
   const u = prompt("Benutzername:");
   const p = prompt("Passwort:");
@@ -137,7 +135,19 @@ function deleteWorker(id){
   saveWorkers(); renderWorkers();
 }
 
-/* ===== LOGIK GENERATION ===== */
+/* ===== LOGIK GENERATION MIT AMICIZIE ===== */
+function pickFriendAware(avail, prevSlots){
+  if(prevSlots.length===0) return avail.shift();
+  for(let i=0;i<avail.length;i++){
+    const w = avail[i];
+    if(w.friends.some(fId=>prevSlots.some(ps=>ps.id===fId))){
+      avail.splice(i,1);
+      return w;
+    }
+  }
+  return avail.shift();
+}
+
 function generate(){
   const selected = [...document.querySelectorAll("#workerList input:checked")]
     .map(i=>workers.find(w=>w.id==i.value));
@@ -156,40 +166,26 @@ function generate(){
   for(let r=1;r<=rot;r++){
     let avail = [...selected];
     out += `=== ROTATION ${r} ===\n`;
-
-    // helper per scegliere considerando amicizie
-    function pickFriendAware(prevSlots){
-      if(prevSlots.length===0) return avail.shift();
-      for(let i=0;i<avail.length;i++){
-        const w = avail[i];
-        if(w.friends.some(fId=>prevSlots.some(ps=>ps.id===fId))){
-          avail.splice(i,1);
-          return w;
-        }
-      }
-      return avail.shift();
-    }
-
     let prev = [];
 
     // SSCC Druck
-    let p = pickFriendAware(prev); out += `SSCC Druck\n\t${p.name}\n`; prev.push(p);
+    let p = pickFriendAware(avail, prev); out += `SSCC Druck\n\t${p.name}\n`; prev.push(p);
 
     // Separation 1-3
-    for(let i=1;i<=3;i++){ p = pickFriendAware(prev); out += `Separation ${i}\n\t${p.name}\n`; prev.push(p); }
+    for(let i=1;i<=3;i++){ p = pickFriendAware(avail, prev); out += `Separation ${i}\n\t${p.name}\n`; prev.push(p); }
 
     // Band Links / Rechts
-    p = pickFriendAware(prev); out += `Band Links\n\t${p.name}\n`; prev.push(p);
-    p = pickFriendAware(prev); out += `Band Rechts\n\t${p.name}\n`; prev.push(p);
+    p = pickFriendAware(avail, prev); out += `Band Links\n\t${p.name}\n`; prev.push(p);
+    p = pickFriendAware(avail, prev); out += `Band Rechts\n\t${p.name}\n`; prev.push(p);
 
     // Stammdaten
     let stammSlots = need==="midi"?1:2;
-    for(let i=1;i<=stammSlots;i++){ p = pickFriendAware(prev); out += `Stammdaten ${i}\n\t${p.name}\n`; prev.push(p); }
+    for(let i=1;i<=stammSlots;i++){ p = pickFriendAware(avail, prev); out += `Stammdaten ${i}\n\t${p.name}\n`; prev.push(p); }
 
     // MIDI rimanenti
     let midiNum=1;
     while(avail.length){
-      p = pickFriendAware(prev); out += `Midi ${midiNum}\n\t${p.name}\n`; prev.push(p); midiNum++;
+      p = pickFriendAware(avail, prev); out += `Midi ${midiNum}\n\t${p.name}\n`; prev.push(p); midiNum++;
     }
 
     out+="\n";
@@ -201,7 +197,6 @@ function generate(){
 
 /* ===== INIT ===== */
 renderWorkers();
-
 </script>
 
 </body>
