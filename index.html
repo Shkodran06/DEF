@@ -142,7 +142,7 @@ function deleteWorker(id){
 function editFriends(id){
   const w = workers.find(w=>w.id===id);
   const names = prompt("Mit welchen Kollegen geht " + w.name + " gut aus? (Namen durch Komma trennen)", w.friends.map(fId=>workers.find(w2=>w2.id===fId).name).join(", "));
-  if(names===null) return; // abgebrochen
+  if(names===null) return;
   const friendNames = names.split(",").map(n=>n.trim()).filter(n=>n!=="");
   w.friends = friendNames.map(n=>{
     const f = workers.find(w2=>w2.name===n);
@@ -152,7 +152,7 @@ function editFriends(id){
   renderWorkers();
 }
 
-/* ===== LOGIK GENERATION MIT AMICIZIE VICINE ===== */
+/* ===== LOGIK GENERATION STABILE ===== */
 function generate(){
   const selected = [...document.querySelectorAll("#workerList input:checked")]
     .map(i=>workers.find(w=>w.id==i.value));
@@ -170,33 +170,34 @@ function generate(){
     let avail = [...selected];
     out += `=== ROTATION ${r} ===\n`;
 
-    // Helper: assegna amici vicini
-    function assign(arr,posName,count){
-      const result = [];
+    function assignRole(posName,count){
       for(let i=0;i<count;i++){
-        if(arr.length===0) break;
+        if(avail.length===0) break;
+        // Cerca un amico del precedente
         let wIndex=0;
-        for(let j=0;j<arr.length;j++){
-          if(i>0 && result[i-1].friends.includes(arr[j].id)){
-            wIndex=j; break;
-          }
+        if(i>0){
+          const prev = avail.findIndex(w=>w.friends.includes(assigned[assigned.length-1].id));
+          if(prev>=0) wIndex=prev;
         }
-        const w = arr.splice(wIndex,1)[0];
-        result.push(w);
+        const w = avail.splice(wIndex,1)[0];
+        assigned.push(w);
         out += `${posName} ${i+1}\n\t${w.name}\n`;
       }
-      return result;
     }
 
-    // SSCC Druck (1)
-    assign(avail,"SSCC Druck",1);
-    // Separation 1-3
-    assign(avail,"Separation",3);
-    // Band Links/ Rechts
-    assign(avail,"Band",2);
-    // Stammdaten
-    assign(avail,need==="midi"?"Stammdaten":"Stammdaten",2);
-    // MIDI rimanenti
+    let assigned=[];
+
+    // Triage: SSCC Druck + Separation 1-3
+    assignRole("SSCC Druck",1);
+    assignRole("Separation",3);
+
+    // Band: 2
+    assignRole("Band",2);
+
+    // Stammdaten: 2
+    assignRole("Stammdaten",2);
+
+    // MIDI: resto
     let midiNum=1;
     while(avail.length>0){
       const w = avail.shift();
