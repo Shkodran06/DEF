@@ -9,7 +9,7 @@ body { font-family: Arial; background:#f2f2f2; padding:20px }
 button { padding:6px 12px; cursor:pointer; margin-right:5px }
 textarea { width:100%; height:420px; }
 .adminPanel { display:none; border:1px solid #ccc; padding:10px; margin-top:10px }
-input[type=text], select { width:150px; margin-right:5px }
+input[type=text] { width:150px; margin-right:5px }
 label { margin-right:10px; display:inline-block }
 </style>
 </head>
@@ -65,8 +65,8 @@ const ADMINS = [
 
 /* ===== Workers Storage ===== */
 let workers = JSON.parse(localStorage.getItem("workers")) || [
-  {id:1,name:"Moritz",friends:[2],last:null},
-  {id:2,name:"Eduard",friends:[1],last:null},
+  {id:1,name:"Moritz",friends:[],last:null},
+  {id:2,name:"Eduard",friends:[],last:null},
   {id:3,name:"Hassan",friends:[],last:null},
   {id:4,name:"Rafael",friends:[],last:null},
   {id:5,name:"Leonardo",friends:[],last:null},
@@ -94,14 +94,12 @@ function renderWorkers(){
   if(adminPanelVisible){
     adminWL.innerHTML="";
     workers.forEach(w=>{
-      // Amicizie multi-select
-      let options = workers.map(w2=>`<option value="${w2.id}" ${w.friends.includes(w2.id) ? "selected":""}>${w2.name}</option>`).join("");
       adminWL.innerHTML += `
         <div>
           <input type="text" value="${w.name}" id="w${w.id}"> 
           <button onclick="saveWorker(${w.id})">✏️</button>
           <button onclick="deleteWorker(${w.id})">➖</button>
-          <select multiple size="3" id="f${w.id}">${options}</select>
+          <button onclick="editFriends(${w.id})">Freunde bearbeiten</button>
         </div>`;
     });
   }
@@ -131,9 +129,6 @@ function saveWorker(id){
   const val = document.getElementById("w"+id).value;
   if(val.trim()==="") return;
   workers.find(w=>w.id===id).name=val;
-  // Salva amicizie
-  const selectedFriends = [...document.getElementById("f"+id).selectedOptions].map(o=>parseInt(o.value));
-  workers.find(w=>w.id===id).friends = selectedFriends.filter(fid=>fid!==id);
   saveWorkers(); renderWorkers();
 }
 
@@ -141,6 +136,20 @@ function deleteWorker(id){
   if(!confirm("Möchten Sie diesen Mitarbeiter wirklich löschen?")) return;
   workers = workers.filter(w=>w.id!==id);
   saveWorkers(); renderWorkers();
+}
+
+/* ===== Edit Friends ===== */
+function editFriends(id){
+  const w = workers.find(w=>w.id===id);
+  const names = prompt("Mit welchen Kollegen geht " + w.name + " gut aus? (Namen durch Komma trennen)", w.friends.map(fId=>workers.find(w2=>w2.id===fId).name).join(", "));
+  if(names===null) return; // abgebrochen
+  const friendNames = names.split(",").map(n=>n.trim()).filter(n=>n!=="");
+  w.friends = friendNames.map(n=>{
+    const f = workers.find(w2=>w2.name===n);
+    return f ? f.id : null;
+  }).filter(f=>f!==null && f!==id);
+  saveWorkers();
+  renderWorkers();
 }
 
 /* ===== LOGIK GENERATION MIT AMICIZIE VICINE ===== */
@@ -161,33 +170,32 @@ function generate(){
     let avail = [...selected];
     out += `=== ROTATION ${r} ===\n`;
 
-    const assign = (arr,posName)=>{
+    // Helper: assegna amici vicini
+    function assign(arr,posName,count){
       const result = [];
-      for(let i=0;i<arr.length;i++){
-        if(avail.length===0) break;
-        // Cerca amici vicini
-        let wIndex = 0;
-        for(let j=0;j<avail.length;j++){
-          if(i>0 && result[i-1].friends.includes(avail[j].id)){
-            wIndex = j; break;
+      for(let i=0;i<count;i++){
+        if(arr.length===0) break;
+        let wIndex=0;
+        for(let j=0;j<arr.length;j++){
+          if(i>0 && result[i-1].friends.includes(arr[j].id)){
+            wIndex=j; break;
           }
         }
-        const w = avail.splice(wIndex,1)[0];
+        const w = arr.splice(wIndex,1)[0];
         result.push(w);
         out += `${posName} ${i+1}\n\t${w.name}\n`;
       }
       return result;
-    };
+    }
 
     // SSCC Druck (1)
-    assign(avail,"SSCC Druck");
+    assign(avail,"SSCC Druck",1);
     // Separation 1-3
-    assign(avail,"Separation");
+    assign(avail,"Separation",3);
     // Band Links/ Rechts
-    assign(avail,"Band");
-    // Stammdaten (1 o 2)
-    assign(avail,need==="midi"?"Stammdaten":"Stammdaten");
-
+    assign(avail,"Band",2);
+    // Stammdaten
+    assign(avail,need==="midi"?"Stammdaten":"Stammdaten",2);
     // MIDI rimanenti
     let midiNum=1;
     while(avail.length>0){
