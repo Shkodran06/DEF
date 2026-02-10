@@ -8,9 +8,9 @@ body { font-family: Arial; background:#f2f2f2; padding:20px }
 .box { background:#fff; padding:15px; margin-bottom:15px; border-radius:6px }
 button { padding:6px 12px; cursor:pointer; margin-right:5px }
 textarea { width:100%; height:420px; }
-.adminPanel { display:none; border:1px solid #ccc; padding:10px; margin-top:10px; }
-input[type=text] { width:150px; }
-label { margin-right:10px; display:inline-block; }
+.adminPanel { display:none; border:1px solid #ccc; padding:10px; margin-top:10px }
+input[type=text], select { width:150px; margin-right:5px }
+label { margin-right:10px; display:inline-block }
 </style>
 </head>
 <body>
@@ -84,19 +84,24 @@ const adminWL = document.getElementById("adminWorkers");
 let adminPanelVisible = false;
 
 function renderWorkers(){
+  // Lista normale
   wl.innerHTML = "";
   workers.forEach(w=>{
     wl.innerHTML += `<label><input type="checkbox" value="${w.id}"> ${w.name}</label><br>`;
   });
 
+  // Admin panel
   if(adminPanelVisible){
     adminWL.innerHTML="";
     workers.forEach(w=>{
+      // Amicizie multi-select
+      let options = workers.map(w2=>`<option value="${w2.id}" ${w.friends.includes(w2.id) ? "selected":""}>${w2.name}</option>`).join("");
       adminWL.innerHTML += `
         <div>
           <input type="text" value="${w.name}" id="w${w.id}"> 
           <button onclick="saveWorker(${w.id})">✏️</button>
           <button onclick="deleteWorker(${w.id})">➖</button>
+          <select multiple size="3" id="f${w.id}">${options}</select>
         </div>`;
     });
   }
@@ -126,6 +131,9 @@ function saveWorker(id){
   const val = document.getElementById("w"+id).value;
   if(val.trim()==="") return;
   workers.find(w=>w.id===id).name=val;
+  // Salva amicizie
+  const selectedFriends = [...document.getElementById("f"+id).selectedOptions].map(o=>parseInt(o.value));
+  workers.find(w=>w.id===id).friends = selectedFriends.filter(fid=>fid!==id);
   saveWorkers(); renderWorkers();
 }
 
@@ -135,57 +143,57 @@ function deleteWorker(id){
   saveWorkers(); renderWorkers();
 }
 
-/* ===== LOGIK GENERATION MIT AMICIZIE ===== */
-function pickFriendAware(avail, prevSlots){
-  if(prevSlots.length===0) return avail.shift();
-  for(let i=0;i<avail.length;i++){
-    const w = avail[i];
-    if(w.friends.some(fId=>prevSlots.some(ps=>ps.id===fId))){
-      avail.splice(i,1);
-      return w;
-    }
-  }
-  return avail.shift();
-}
-
+/* ===== LOGIK GENERATION MIT AMICIZIE VICINE ===== */
 function generate(){
   const selected = [...document.querySelectorAll("#workerList input:checked")]
     .map(i=>workers.find(w=>w.id==i.value));
 
-  const need = document.querySelector("input[name='need']:checked").value;
-  const rot = parseInt(document.getElementById("rotations").value);
-
-  const REQUIRED = 1 + 3 + 2 + 2; // SSCC + SEP + BAND + STAMM
-  if(selected.length < REQUIRED){
-    alert("Nicht genug Personal für die Planung");
+  if(selected.length===0){
+    alert("Bitte wähle mindestens einen Mitarbeiter aus!");
     return;
   }
 
+  const need = document.querySelector("input[name='need']:checked").value;
+  const rot = parseInt(document.getElementById("rotations").value);
   let out = "";
 
   for(let r=1;r<=rot;r++){
     let avail = [...selected];
     out += `=== ROTATION ${r} ===\n`;
-    let prev = [];
 
-    // SSCC Druck
-    let p = pickFriendAware(avail, prev); out += `SSCC Druck\n\t${p.name}\n`; prev.push(p);
+    const assign = (arr,posName)=>{
+      const result = [];
+      for(let i=0;i<arr.length;i++){
+        if(avail.length===0) break;
+        // Cerca amici vicini
+        let wIndex = 0;
+        for(let j=0;j<avail.length;j++){
+          if(i>0 && result[i-1].friends.includes(avail[j].id)){
+            wIndex = j; break;
+          }
+        }
+        const w = avail.splice(wIndex,1)[0];
+        result.push(w);
+        out += `${posName} ${i+1}\n\t${w.name}\n`;
+      }
+      return result;
+    };
 
+    // SSCC Druck (1)
+    assign(avail,"SSCC Druck");
     // Separation 1-3
-    for(let i=1;i<=3;i++){ p = pickFriendAware(avail, prev); out += `Separation ${i}\n\t${p.name}\n`; prev.push(p); }
-
-    // Band Links / Rechts
-    p = pickFriendAware(avail, prev); out += `Band Links\n\t${p.name}\n`; prev.push(p);
-    p = pickFriendAware(avail, prev); out += `Band Rechts\n\t${p.name}\n`; prev.push(p);
-
-    // Stammdaten
-    let stammSlots = need==="midi"?1:2;
-    for(let i=1;i<=stammSlots;i++){ p = pickFriendAware(avail, prev); out += `Stammdaten ${i}\n\t${p.name}\n`; prev.push(p); }
+    assign(avail,"Separation");
+    // Band Links/ Rechts
+    assign(avail,"Band");
+    // Stammdaten (1 o 2)
+    assign(avail,need==="midi"?"Stammdaten":"Stammdaten");
 
     // MIDI rimanenti
     let midiNum=1;
-    while(avail.length){
-      p = pickFriendAware(avail, prev); out += `Midi ${midiNum}\n\t${p.name}\n`; prev.push(p); midiNum++;
+    while(avail.length>0){
+      const w = avail.shift();
+      out += `Midi ${midiNum}\n\t${w.name}\n`;
+      midiNum++;
     }
 
     out+="\n";
