@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>Schichtplanung</title>
+<style>
+body { font-family: Arial; background:#f2f2f2; padding:20px }
+.box { background:#fff; padding:15px; margin-bottom:15px; border-radius:6px }
+button { padding:6px 12px; cursor:pointer; margin-right:5px }
+textarea { width:100%; height:420px; }
+.adminPanel { display:none; border:1px solid #ccc; padding:10px; margin-top:10px; }
+input[type=text] { width:150px; }
+label { margin-right:10px; display:inline-block; }
+</style>
+</head>
+<body>
+
+<h2>Schichtplanung
+<button onclick="adminLogin()">Admin</button>
+<span id="welcome"></span>
+</h2>
+
+<div class="box">
+<b>Mitarbeiter anwesend</b><br>
+<div id="workerList"></div>
+</div>
+
+<div class="box">
+<b>Wo wird mehr Personal benötigt?</b><br>
+<label><input type="radio" name="need" value="midi" checked> MIDI</label>
+<label><input type="radio" name="need" value="stamm"> Stammdaten</label>
+</div>
+
+<div class="box">
+<b>Anzahl der Rotationen</b><br>
+<select id="rotations">
+<option value="1">1</option>
+<option value="2">2</option>
+<option value="3">3</option>
+</select>
+</div>
+
+<div class="box">
+<button onclick="generate()">Planung generieren</button>
+</div>
+
+<div class="box">
+<textarea id="output" readonly></textarea>
+</div>
+
+<!-- Admin Panel -->
+<div class="adminPanel" id="adminPanel">
+<h3>Adminbereich</h3>
+<div id="adminWorkers"></div>
+<button onclick="addWorker()">➕ Hinzufügen</button>
+</div>
+
+<script>
+/* ===== Admin Login ===== */
+const ADMINS = [
+  {user:"Shkodran", pass:"Shkodran2006@"},
+  {user:"Admin2", pass:"Admin22024@"},
+  {user:"Admin3", pass:"Admin32024@"}
+];
+
+/* ===== Workers Storage ===== */
+let workers = JSON.parse(localStorage.getItem("workers")) || [
+  {id:1,name:"Moritz",friends:[],last:null},
+  {id:2,name:"Eduard",friends:[],last:null},
+  {id:3,name:"Hassan",friends:[],last:null},
+  {id:4,name:"Rafael",friends:[],last:null},
+  {id:5,name:"Leonardo",friends:[],last:null},
+  {id:6,name:"George",friends:[],last:null},
+  {id:7,name:"Ilie",friends:[],last:null},
+  {id:8,name:"Amer",friends:[],last:null},
+  {id:9,name:"Vlatko",friends:[],last:null}
+];
+
+function saveWorkers(){ localStorage.setItem("workers",JSON.stringify(workers)); }
+
+/* ===== Render Worker List ===== */
+const wl = document.getElementById("workerList");
+const adminWL = document.getElementById("adminWorkers");
+
+function renderWorkers(){
+  wl.innerHTML = "";
+  workers.forEach(w=>{
+    wl.innerHTML += `<label><input type="checkbox" value="${w.id}"> ${w.name}</label><br>`;
+  });
+
+  // admin panel
+  if(adminPanelVisible){
+    adminWL.innerHTML="";
+    workers.forEach(w=>{
+      adminWL.innerHTML += `
+        <div>
+          <input type="text" value="${w.name}" id="w${w.id}"> 
+          <button onclick="saveWorker(${w.id})">✏️</button>
+          <button onclick="deleteWorker(${w.id})">➖</button>
+        </div>`;
+    });
+  }
+}
+
+/* ===== Admin Functions ===== */
+let adminPanelVisible = false;
+
+function adminLogin(){
+  const u = prompt("Benutzername:");
+  const p = prompt("Passwort:");
+  const ok = ADMINS.find(a=>a.user===u && a.pass===p);
+  if(!ok){ alert("Zugang verweigert"); return; }
+  document.getElementById("welcome").innerText = "Hallo " + u;
+  adminPanelVisible = true;
+  document.getElementById("adminPanel").style.display="block";
+  renderWorkers();
+}
+
+function addWorker(){
+  const name = prompt("Name des Mitarbeiters:");
+  if(!name) return;
+  const id = workers.length ? Math.max(...workers.map(w=>w.id))+1 : 1;
+  workers.push({id:id,name:name,friends:[],last:null});
+  saveWorkers(); renderWorkers();
+}
+
+function saveWorker(id){
+  const val = document.getElementById("w"+id).value;
+  if(val.trim()==="") return;
+  workers.find(w=>w.id===id).name=val;
+  saveWorkers(); renderWorkers();
+}
+
+function deleteWorker(id){
+  if(!confirm("Möchten Sie diesen Mitarbeiter wirklich löschen?")) return;
+  workers = workers.filter(w=>w.id!==id);
+  saveWorkers(); renderWorkers();
+}
+
+/* ===== LOGIK GENERATION ===== */
+function generate(){
+  const selected = [...document.querySelectorAll("#workerList input:checked")]
+    .map(i=>workers.find(w=>w.id==i.value));
+
+  const need = document.querySelector("input[name='need']:checked").value;
+  const rot = parseInt(document.getElementById("rotations").value);
+
+  const REQUIRED = 1 + 3 + 2 + 2; // SSCC + SEP + BAND + STAMM
+  if(selected.length < REQUIRED){
+    alert("Nicht genug Personal für die Planung");
+    return;
+  }
+
+  let out = "";
+
+  for(let r=1;r<=rot;r++){
+    let avail = [...selected];
+    out += `=== ROTATION ${r} ===\n`;
+
+    // helper per scegliere considerando amicizie
+    function pickFriendAware(prevSlots){
+      if(prevSlots.length===0) return avail.shift();
+      for(let i=0;i<avail.length;i++){
+        const w = avail[i];
+        if(w.friends.some(fId=>prevSlots.some(ps=>ps.id===fId))){
+          avail.splice(i,1);
+          return w;
+        }
+      }
+      return avail.shift();
+    }
+
+    let prev = [];
+
+    // SSCC Druck
+    let p = pickFriendAware(prev); out += `SSCC Druck\n\t${p.name}\n`; prev.push(p);
+
+    // Separation 1-3
+    for(let i=1;i<=3;i++){ p = pickFriendAware(prev); out += `Separation ${i}\n\t${p.name}\n`; prev.push(p); }
+
+    // Band Links / Rechts
+    p = pickFriendAware(prev); out += `Band Links\n\t${p.name}\n`; prev.push(p);
+    p = pickFriendAware(prev); out += `Band Rechts\n\t${p.name}\n`; prev.push(p);
+
+    // Stammdaten
+    let stammSlots = need==="midi"?1:2;
+    for(let i=1;i<=stammSlots;i++){ p = pickFriendAware(prev); out += `Stammdaten ${i}\n\t${p.name}\n`; prev.push(p); }
+
+    // MIDI rimanenti
+    let midiNum=1;
+    while(avail.length){
+      p = pickFriendAware(prev); out += `Midi ${midiNum}\n\t${p.name}\n`; prev.push(p); midiNum++;
+    }
+
+    out+="\n";
+  }
+
+  document.getElementById("output").value = out;
+  saveWorkers();
+}
+
+/* ===== INIT ===== */
+renderWorkers();
+
+</script>
+
+</body>
+</html>
