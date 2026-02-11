@@ -153,69 +153,92 @@ function editFriends(id){
 function generate(){
   const selected = [...document.querySelectorAll("#workerList input:checked")]
     .map(i=>workers.find(w=>w.id==i.value));
-  if(selected.length===0){ alert("Bitte wähle mindestens einen Mitarbeiter aus!"); return; }
+
+  if(selected.length===0){ 
+    alert("Bitte wähle mindestens einen Mitarbeiter aus!"); 
+    return; 
+  }
 
   const rot = parseInt(document.getElementById("rotations").value);
   const planArea = document.getElementById("planArea");
   planArea.innerHTML = ""; // reset
 
-  for(let r=1;r<=rot;r++){
-    let avail = [...selected];
+  for(let r=1; r<=rot; r++){
+    // copia dei lavoratori selezionati
+    let avail = selected.map(w=>({...w}));
+
     const rotDiv = document.createElement("div");
     rotDiv.className="role-box";
     rotDiv.innerHTML = `<h3>ROTATION ${r}</h3>`;
     planArea.appendChild(rotDiv);
 
-    function assign(count){
+    // funzione per assegnare ruoli in base a priorità
+    function assignRole(count, roleName){
       const assigned = [];
       for(let i=0;i<count;i++){
         if(avail.length===0) break;
-        let wIndex = 0;
-        if(i>0){
-          const prev = assigned[i-1];
-          const friendIdx = avail.findIndex(w=>w.friends.includes(prev.id));
-          if(friendIdx>=0) wIndex = friendIdx;
-        }
-        assigned.push(avail.splice(wIndex,1)[0]);
+
+        // scelgo chi ha fatto meno ruoli pesanti
+        avail.sort((a,b)=>{
+          let scoreA = (a.lastRoleWeight || 0);
+          let scoreB = (b.lastRoleWeight || 0);
+          return scoreA - scoreB;
+        });
+
+        let w = avail.shift(); // prendo il primo con minor carico
+        w.lastRole = roleName; // aggiorno ruolo attuale
+        w.lastRoleWeight = (roleName==="Triage" ? 3 : roleName==="Band" ? 2 : roleName==="Stammdaten" ? 1 : 0);
+        assigned.push(w);
       }
       return assigned;
     }
 
     // Triage
-    const sscc = assign(1);
-    const sep = assign(3);
     const triDiv = document.createElement("div");
     triDiv.innerHTML = "<b>Triage:</b><br>";
+    const sscc = assignRole(1,"Triage");
+    const sep = assignRole(3,"Triage");
     triDiv.innerHTML += `SSCC Druck: ${sscc[0]?.name || "-"}<br>`;
     sep.forEach((w,i)=> triDiv.innerHTML += `Separation ${i+1}: ${w?.name || "-"}<br>`);
     rotDiv.appendChild(triDiv);
 
     // Band
-    const band = assign(2);
     const bandDiv = document.createElement("div");
     bandDiv.innerHTML = "<b>Band:</b><br>";
+    const band = assignRole(2,"Band");
     band.forEach((w,i)=> bandDiv.innerHTML += `Band ${i+1}: ${w?.name || "-"}<br>`);
     rotDiv.appendChild(bandDiv);
 
     // Stammdaten
-    const stam = assign(2);
     const stamDiv = document.createElement("div");
     stamDiv.innerHTML = "<b>Stammdaten:</b><br>";
+    const stam = assignRole(2,"Stammdaten");
     stam.forEach((w,i)=> stamDiv.innerHTML += `Stammdaten ${i+1}: ${w?.name || "-"}<br>`);
     rotDiv.appendChild(stamDiv);
 
-    // MIDI
+    // MIDI rimanenti
     const midiDiv = document.createElement("div");
     midiDiv.innerHTML = "<b>MIDI:</b><br>";
     let midiNum = 1;
-    while(avail.length>0){
-      const w = avail.shift();
+    avail.forEach(w=>{
       midiDiv.innerHTML += `Midi ${midiNum}: ${w?.name || "-"}<br>`;
       midiNum++;
-    }
+    });
     rotDiv.appendChild(midiDiv);
+
+    // Aggiorno lavoratori originali con ruolo dell’ultima rotazione
+    selected.forEach(orig=>{
+      const match = [...sscc,...sep,...band,...stam,...avail].find(a=>a.id===orig.id);
+      if(match){
+        orig.lastRole = match.lastRole;
+        orig.lastRoleWeight = match.lastRoleWeight;
+      }
+    });
   }
+
+  saveWorkers();
 }
+
 
 renderWorkers();
 </script>
