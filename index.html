@@ -172,11 +172,12 @@ function generate(){
       const assigned = [];
       for(let i=0;i<count;i++){
         if(avail.length===0) break;
-        let wIndex=0;
+        // cerca amico del precedente se possibile
+        let wIndex = 0;
         if(i>0){
           const prev = assigned[i-1];
           const friendIdx = avail.findIndex(w=>w.friends.includes(prev.id));
-          if(friendIdx>=0) wIndex=friendIdx;
+          if(friendIdx>=0) wIndex = friendIdx;
         }
         assigned.push(avail.splice(wIndex,1)[0]);
       }
@@ -188,24 +189,24 @@ function generate(){
     const sep = assign(3);
     out += "Triage:\n";
     out += `  SSCC Druck: ${sscc[0]?.name || "-"}\n`;
-    sep.forEach((w,i)=> out += `  Separation ${i+1}: ${w.name}\n`);
+    sep.forEach((w,i)=> out += `  Separation ${i+1}: ${w?.name || "-"}\n`);
 
     // Band
     const band = assign(2);
     out += "Band:\n";
-    band.forEach((w,i)=> out += `  Band ${i+1}: ${w.name}\n`);
+    band.forEach((w,i)=> out += `  Band ${i+1}: ${w?.name || "-"}\n`);
 
     // Stammdaten
     const stam = assign(2);
     out += "Stammdaten:\n";
-    stam.forEach((w,i)=> out += `  Stammdaten ${i+1}: ${w.name}\n`);
+    stam.forEach((w,i)=> out += `  Stammdaten ${i+1}: ${w?.name || "-"}\n`);
 
     // MIDI rimanenti
     out += "MIDI:\n";
-    let midiNum=1;
+    let midiNum = 1;
     while(avail.length>0){
       const w = avail.shift();
-      out += `  Midi ${midiNum}: ${w.name}\n`;
+      out += `  Midi ${midiNum}: ${w?.name || "-"}\n`;
       midiNum++;
     }
 
@@ -215,6 +216,7 @@ function generate(){
   document.getElementById("output").value = out;
   saveWorkers();
 }
+
 
 /* ===== INIT ===== */
 renderWorkers();
