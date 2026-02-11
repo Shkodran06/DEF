@@ -7,10 +7,11 @@
 body { font-family: Arial; background:#f2f2f2; padding:20px }
 .box { background:#fff; padding:15px; margin-bottom:15px; border-radius:6px }
 button { padding:6px 12px; cursor:pointer; margin-right:5px }
-textarea { width:100%; height:420px; }
+.role-box { border:1px solid #ccc; padding:10px; margin-bottom:10px; background:#f9f9f9; border-radius:6px }
 .adminPanel { display:none; border:1px solid #ccc; padding:10px; margin-top:10px }
 input[type=text] { width:150px; margin-right:5px }
 label { margin-right:10px; display:inline-block }
+h3 { margin-bottom:5px; }
 </style>
 </head>
 <body>
@@ -44,9 +45,8 @@ label { margin-right:10px; display:inline-block }
 <button onclick="generate()">Planung generieren</button>
 </div>
 
-<div class="box">
-<textarea id="output" readonly></textarea>
-</div>
+<!-- Area risultati -->
+<div id="planArea"></div>
 
 <!-- Admin Panel -->
 <div class="adminPanel" id="adminPanel">
@@ -136,7 +136,6 @@ function deleteWorker(id){
   saveWorkers(); renderWorkers();
 }
 
-/* ===== Edit Friends ===== */
 function editFriends(id){
   const w = workers.find(w=>w.id===id);
   const names = prompt("Mit welchen Kollegen geht " + w.name + " gut aus? (Namen durch Komma trennen)", w.friends.map(fId=>workers.find(w2=>w2.id===fId).name).join(", "));
@@ -150,29 +149,27 @@ function editFriends(id){
   renderWorkers();
 }
 
-/* ===== LOGIK GENERATION DEFINITIVA CON LISTE CHIARE ===== */
+/* ===== Generazione con visualizzazione reale ===== */
 function generate(){
   const selected = [...document.querySelectorAll("#workerList input:checked")]
     .map(i=>workers.find(w=>w.id==i.value));
+  if(selected.length===0){ alert("Bitte wähle mindestens einen Mitarbeiter aus!"); return; }
 
-  if(selected.length===0){
-    alert("Bitte wähle mindestens einen Mitarbeiter aus!");
-    return;
-  }
-
-  const need = document.querySelector("input[name='need']:checked").value;
   const rot = parseInt(document.getElementById("rotations").value);
-  let out = "";
+  const planArea = document.getElementById("planArea");
+  planArea.innerHTML = ""; // reset
 
   for(let r=1;r<=rot;r++){
     let avail = [...selected];
-    out += `=== ROTATION ${r} ===\n\n`;
+    const rotDiv = document.createElement("div");
+    rotDiv.className="role-box";
+    rotDiv.innerHTML = `<h3>ROTATION ${r}</h3>`;
+    planArea.appendChild(rotDiv);
 
     function assign(count){
       const assigned = [];
       for(let i=0;i<count;i++){
         if(avail.length===0) break;
-        // cerca amico del precedente se possibile
         let wIndex = 0;
         if(i>0){
           const prev = assigned[i-1];
@@ -187,38 +184,39 @@ function generate(){
     // Triage
     const sscc = assign(1);
     const sep = assign(3);
-    out += "Triage:\n";
-    out += `  SSCC Druck: ${sscc[0]?.name || "-"}\n`;
-    sep.forEach((w,i)=> out += `  Separation ${i+1}: ${w?.name || "-"}\n`);
+    const triDiv = document.createElement("div");
+    triDiv.innerHTML = "<b>Triage:</b><br>";
+    triDiv.innerHTML += `SSCC Druck: ${sscc[0]?.name || "-"}<br>`;
+    sep.forEach((w,i)=> triDiv.innerHTML += `Separation ${i+1}: ${w?.name || "-"}<br>`);
+    rotDiv.appendChild(triDiv);
 
     // Band
     const band = assign(2);
-    out += "Band:\n";
-    band.forEach((w,i)=> out += `  Band ${i+1}: ${w?.name || "-"}\n`);
+    const bandDiv = document.createElement("div");
+    bandDiv.innerHTML = "<b>Band:</b><br>";
+    band.forEach((w,i)=> bandDiv.innerHTML += `Band ${i+1}: ${w?.name || "-"}<br>`);
+    rotDiv.appendChild(bandDiv);
 
     // Stammdaten
     const stam = assign(2);
-    out += "Stammdaten:\n";
-    stam.forEach((w,i)=> out += `  Stammdaten ${i+1}: ${w?.name || "-"}\n`);
+    const stamDiv = document.createElement("div");
+    stamDiv.innerHTML = "<b>Stammdaten:</b><br>";
+    stam.forEach((w,i)=> stamDiv.innerHTML += `Stammdaten ${i+1}: ${w?.name || "-"}<br>`);
+    rotDiv.appendChild(stamDiv);
 
-    // MIDI rimanenti
-    out += "MIDI:\n";
+    // MIDI
+    const midiDiv = document.createElement("div");
+    midiDiv.innerHTML = "<b>MIDI:</b><br>";
     let midiNum = 1;
     while(avail.length>0){
       const w = avail.shift();
-      out += `  Midi ${midiNum}: ${w?.name || "-"}\n`;
+      midiDiv.innerHTML += `Midi ${midiNum}: ${w?.name || "-"}<br>`;
       midiNum++;
     }
-
-    out += "\n";
+    rotDiv.appendChild(midiDiv);
   }
-
-  document.getElementById("output").value = out;
-  saveWorkers();
 }
 
-
-/* ===== INIT ===== */
 renderWorkers();
 </script>
 
