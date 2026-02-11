@@ -84,13 +84,11 @@ const adminWL = document.getElementById("adminWorkers");
 let adminPanelVisible = false;
 
 function renderWorkers(){
-  // Lista normale
   wl.innerHTML = "";
   workers.forEach(w=>{
     wl.innerHTML += `<label><input type="checkbox" value="${w.id}"> ${w.name}</label><br>`;
   });
 
-  // Admin panel
   if(adminPanelVisible){
     adminWL.innerHTML="";
     workers.forEach(w=>{
@@ -152,7 +150,7 @@ function editFriends(id){
   renderWorkers();
 }
 
-/* ===== LOGIK GENERATION STABILE ===== */
+/* ===== LOGIK GENERATION DEFINITIVA CON LISTE CHIARE ===== */
 function generate(){
   const selected = [...document.querySelectorAll("#workerList input:checked")]
     .map(i=>workers.find(w=>w.id==i.value));
@@ -168,44 +166,50 @@ function generate(){
 
   for(let r=1;r<=rot;r++){
     let avail = [...selected];
-    out += `=== ROTATION ${r} ===\n`;
+    out += `=== ROTATION ${r} ===\n\n`;
 
-    function assignRole(posName,count){
+    function assign(count){
+      const assigned = [];
       for(let i=0;i<count;i++){
         if(avail.length===0) break;
-        // Cerca un amico del precedente
         let wIndex=0;
         if(i>0){
-          const prev = avail.findIndex(w=>w.friends.includes(assigned[assigned.length-1].id));
-          if(prev>=0) wIndex=prev;
+          const prev = assigned[i-1];
+          const friendIdx = avail.findIndex(w=>w.friends.includes(prev.id));
+          if(friendIdx>=0) wIndex=friendIdx;
         }
-        const w = avail.splice(wIndex,1)[0];
-        assigned.push(w);
-        out += `${posName} ${i+1}\n\t${w.name}\n`;
+        assigned.push(avail.splice(wIndex,1)[0]);
       }
+      return assigned;
     }
 
-    let assigned=[];
+    // Triage
+    const sscc = assign(1);
+    const sep = assign(3);
+    out += "Triage:\n";
+    out += `  SSCC Druck: ${sscc[0]?.name || "-"}\n`;
+    sep.forEach((w,i)=> out += `  Separation ${i+1}: ${w.name}\n`);
 
-    // Triage: SSCC Druck + Separation 1-3
-    assignRole("SSCC Druck",1);
-    assignRole("Separation",3);
+    // Band
+    const band = assign(2);
+    out += "Band:\n";
+    band.forEach((w,i)=> out += `  Band ${i+1}: ${w.name}\n`);
 
-    // Band: 2
-    assignRole("Band",2);
+    // Stammdaten
+    const stam = assign(2);
+    out += "Stammdaten:\n";
+    stam.forEach((w,i)=> out += `  Stammdaten ${i+1}: ${w.name}\n`);
 
-    // Stammdaten: 2
-    assignRole("Stammdaten",2);
-
-    // MIDI: resto
+    // MIDI rimanenti
+    out += "MIDI:\n";
     let midiNum=1;
     while(avail.length>0){
       const w = avail.shift();
-      out += `Midi ${midiNum}\n\t${w.name}\n`;
+      out += `  Midi ${midiNum}: ${w.name}\n`;
       midiNum++;
     }
 
-    out+="\n";
+    out += "\n";
   }
 
   document.getElementById("output").value = out;
